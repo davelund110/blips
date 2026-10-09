@@ -27,7 +27,7 @@ This bLIP is licensed under the CC0 license.
 
 | Bits    | Name                         | Description                                           | Context | Dependencies          |
 |---------|------------------------------|-------------------------------------------------------|---------|-----------------------|
-| 264/265 | `option_independent_secrets` | Accepts per-commitment secrets not from a single seed | INT     | `option_channel_type` |
+| 266/267 | `option_independent_secrets` | Accepts per-commitment secrets not from a single seed | INT     | `option_channel_type` |
 
 The even bit is only used in `channel_type`. The odd bit is set in `init` and
 `node_announcement`.
@@ -64,8 +64,8 @@ secret key or does not generate the previous `per_commitment_point`.
 
 On a channel with `option_independent_secrets`, each per-commitment point is
 computed from its per-commitment secret exactly as in BOLT 3
-(`per_commitment_point = per_commitment_secret * G`), however the secret was
-generated. This applies to every per-commitment point a node sends:
+(`per_commitment_point = per_commitment_secret * G`), no matter how the secret
+was generated. This applies to every per-commitment point a node sends:
   - `first_per_commitment_point` in `open_channel`, `accept_channel`,
     `open_channel2` and `accept_channel2`.
   - `second_per_commitment_point` in `channel_ready`, `open_channel2` and
@@ -129,22 +129,23 @@ The commitment number is still 48 bits, so a channel with
 ### Taproot channels
 
 `option_independent_secrets` MAY be combined with the simple taproot channel
-types. The per-commitment secrets of such a channel follow this bLIP as on any
-other channel.
+types of
+[bolt-simple-taproot.md](https://github.com/lightning/bolts/blob/master/bolt-simple-taproot.md).
+The per-commitment secrets of such a channel follow this bLIP as on any other
+channel.
 
-The simple taproot channel proposal also recommends deriving each MuSig2
-verification nonce from a second shachain, seeded from the root of the
-revocation secrets, so that a node can reproduce its nonces without storing
-them. That scheme is local to the node: its peer never sees the secret nonces
-and does not check how they were made.
+That extension BOLT also recommends deriving each MuSig2 verification nonce
+from a second shachain, seeded from the root of the revocation secrets, so
+that a node can reproduce its nonces without storing them. That scheme is
+local to the node: its peer never sees the secret nonces and does not check
+how they were made.
 
 A node whose signing keys are held by several signers:
   - MUST NOT derive its MuSig2 secret nonces from a seed that any single
     signer holds.
   - MUST persist each verification nonce it sends, or whatever its signers
-    need to reproduce it, before sending it, as the simple taproot channel
-    proposal already requires of nonces not made with its counter-based
-    scheme.
+    need to reproduce it, before sending it, as that extension BOLT already
+    requires of nonces not made with its counter-based scheme.
 
 ## Motivation
 
