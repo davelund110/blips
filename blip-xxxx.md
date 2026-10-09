@@ -166,9 +166,16 @@ agree that the commitment is revoked.
 ## Rationale
 
 The cost falls on the receiver of such secrets, which stores 32 bytes per
-revoked commitment instead of a fixed 49 entries. A node already keeps
-per-commitment data for every revoked state in order to punish a breach, so
-this adds to existing storage rather than creating a new kind.
+revoked commitment instead of a fixed 49 entries. Its storage for the channel
+therefore grows with every update instead of staying constant: about 32 MB
+for a million updates, bounded only by the 48-bit commitment number. That is
+the price of the option, and it is paid only on channels that use it. A node
+that cannot afford it leaves the bit unset, which this bLIP allows (the bit is
+a SHOULD, not a MUST), and its channels keep the compact form; a node that sets
+it can still close a channel whose storage grows too large. Some
+implementations already keep per-commitment data for every revoked state in
+order to punish a breach (lnd's revocation log, for example), and for them the
+secret adds 32 bytes to a record that exists anyway.
 
 A single-signer node gains nothing from the option and loses nothing either: it
 may keep using the seed-based algorithm, so it can still regenerate its own
@@ -192,6 +199,13 @@ unable to move the channel past it.
 The option is a `channel_type` add-on rather than a node-wide flag, so it is
 agreed per channel like other channel features, and a channel's rules never
 change after it opens.
+
+Feature bits below 256 are reserved for the BOLTs, so this one is 266/267. A
+feature vector that sets it is 34 bytes long, where the BOLT channel types in
+use today fit in 7. That cost is paid once per channel in `channel_type`, and
+in `init` and `node_announcement` as for any other bLIP feature bit. If every
+node comes to need the option, moving it into the BOLTs would also give it a
+bit below 256.
 
 Taproot channels need no further change to the protocol, because their nonces
 are never checked by the peer. They do need care inside a multi-signer node. A
@@ -222,6 +236,13 @@ add-on if both peers agree to it in `channel_type`.
 A node that has open channels with the add-on must not be downgraded to a
 version without it: the older version would expect the peer's next secret to
 extend a shachain, and fail the channel.
+
+A node restored from a static channel backup can produce only the secrets that
+backup holds. If it holds the compact representation, the node can still punish
+every state a seed-based peer revoked, but none whose secret it had to store
+individually: against a peer that does not use the seed-based algorithm, it
+can no longer punish a breach. Implementations should make this clear to their
+users.
 
 ## Reference Implementations
 
