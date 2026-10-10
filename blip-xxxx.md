@@ -25,9 +25,9 @@ This bLIP is licensed under the CC0 license.
 
 ### Feature bits
 
-| Bits    | Name                         | Description                                           | Context | Dependencies          |
-|---------|------------------------------|-------------------------------------------------------|---------|-----------------------|
-| 266/267 | `option_independent_secrets` | Accepts per-commitment secrets not from a single seed | INT     | `option_channel_type` |
+| Bits    | Name                         | Description                                      | Context | Dependencies          |
+|---------|------------------------------|--------------------------------------------------|---------|-----------------------|
+| 266/267 | `option_independent_secrets` | Accepts per-commitment secrets not from one seed | INT     | `option_channel_type` |
 
 The even bit is only used in `channel_type`. The odd bit is set in `init` and
 `node_announcement`.
@@ -42,6 +42,21 @@ A node:
       algorithm of BOLT 3 can accept the channel.
     - MUST accept a `channel_type` that adds `option_independent_secrets` to a
       `channel_type` it would otherwise accept.
+
+### Channel types
+
+`option_independent_secrets` is not a channel type on its own. It is added to
+the variations that
+[BOLT #2](https://github.com/lightning/bolts/blob/master/02-peer-protocol.md#defined-channel-types)
+allows for each basic channel type, which become:
+  - `option_scid_alias` (bit 46)
+  - `option_zeroconf` (bit 50)
+  - `option_independent_secrets` (bit 266)
+
+It may also be added to the simple taproot channel types (see
+[Taproot channels](#taproot-channels)). It only changes how per-commitment
+secrets are generated and kept, not the commitment or HTLC transactions, so it
+applies the same way to every type it is added to.
 
 ### Changes to BOLT 2
 
