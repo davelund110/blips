@@ -37,11 +37,9 @@ A node:
     so that a peer which generates its secrets jointly can open channels with
     it.
   - if both peers set `option_independent_secrets`:
-    - MAY include it in the `channel_type` it proposes.
-    - if it does not generate its per-commitment secrets with the seed-based
-      algorithm of BOLT 3:
-      - MUST include it in the `channel_type` it proposes.
-  - if it sets `option_independent_secrets`:
+    - SHOULD include it in the `channel_type` it proposes, so that a peer that
+      does not generate its per-commitment secrets with the seed-based
+      algorithm of BOLT 3 can accept the channel.
     - MUST accept a `channel_type` that adds `option_independent_secrets` to a
       `channel_type` it would otherwise accept.
 
@@ -73,23 +71,28 @@ was generated. This applies to every per-commitment point a node sends:
   - `next_per_commitment_point` in `revoke_and_ack`.
   - `my_current_per_commitment_point` in `channel_reestablish`.
 
-A node that does not generate its per-commitment secrets with the seed-based
-algorithm of BOLT 3:
+For a channel whose per-commitment secrets a node will not generate with the
+seed-based algorithm of BOLT 3, that node:
   - MUST include `option_independent_secrets` in the `channel_type` of the
     `open_channel` or `open_channel2` it sends, since that message already
     carries its first per-commitment point.
-  - MUST NOT accept a channel whose `channel_type` does not include
+  - MUST NOT accept the channel if its `channel_type` does not include
     `option_independent_secrets`.
 
-If the peer refuses the `channel_type`, the channel is not opened, and no
-per-commitment secret has been revealed.
+With a peer that does not set `option_independent_secrets`, such a node either
+generates that channel's secrets with the seed-based algorithm or does not open
+the channel. If the peer refuses the `channel_type`, the channel is not opened,
+and no per-commitment secret has been revealed.
 
 ### Changes to BOLT 3
 
 For a channel with `option_independent_secrets`, the requirements of
 [Per-commitment Secret Requirements](https://github.com/lightning/bolts/blob/master/03-transactions.md#per-commitment-secret-requirements)
 on the first secret, on the I'th secret and on the receiving node are replaced
-by the following.
+by the following, and its requirements on the seed apply only to a node that
+generates its secrets with the seed-based algorithm. The per-commitment secret
+of commitment number `n` still corresponds to index `2^48 - 1 - n`, the index
+under which the compact representation stores it.
 
 A node generating its per-commitment secrets:
   - MAY generate them by any method, including:
@@ -109,14 +112,21 @@ A node generating its per-commitment secrets:
     sends the point.
   - MUST be able to produce the last per-commitment secret it revealed, in
     order to check `your_last_per_commitment_secret` in `channel_reestablish`.
+  - SHOULD be able to produce the per-commitment secret of any commitment
+    number it may have reached, including after being restored from an old
+    backup, so that it can check `your_last_per_commitment_secret` when its
+    peer reports a later state.
 
 A node receiving per-commitment secrets:
   - MUST NOT require that the per-commitment secrets it receives are related
     to each other in any way.
   - MUST keep each per-commitment secret it receives, so that it can produce
-    the secret of every commitment transaction its peer has revoked, until the
-    funding output has been spent irrevocably and, if a revoked commitment
-    transaction spent it, until the outputs of that transaction are resolved.
+    the secret of every commitment transaction its peer has revoked, until
+    every funding output that such a commitment transaction could spend has
+    been spent irrevocably (after a splice there can be more than one) and, if
+    a revoked commitment transaction spent one, until every output of that
+    transaction, and of any HTLC transaction that spends it, has been
+    irrevocably resolved.
   - MAY store per-commitment secrets in the compact representation in
     [Efficient Per-commitment Secret Storage](https://github.com/lightning/bolts/blob/master/03-transactions.md#efficient-per-commitment-secret-storage),
     for as long as each one it receives can be inserted into it:
@@ -165,17 +175,19 @@ agree that the commitment is revoked.
 
 ## Rationale
 
-The cost falls on the receiver of such secrets, which stores 32 bytes per
-revoked commitment instead of a fixed 49 entries. Its storage for the channel
-therefore grows with every update instead of staying constant: about 32 MB
-for a million updates, bounded only by the 48-bit commitment number. That is
-the price of the option, and it is paid only on channels that use it. A node
-that cannot afford it leaves the bit unset, which this bLIP allows (the bit is
-a SHOULD, not a MUST), and its channels keep the compact form; a node that sets
-it can still close a channel whose storage grows too large. Some
-implementations already keep per-commitment data for every revoked state in
-order to punish a breach (lnd's revocation log, for example), and for them the
-secret adds 32 bytes to a record that exists anyway.
+The cost falls on the receiver of such secrets, which stores a 32-byte secret
+per revoked commitment, with its commitment number, instead of a fixed 49
+entries. Its storage for the channel therefore grows with every update instead
+of staying constant: about 32 MB of secrets for a million updates, plus each
+implementation's per-record overhead, bounded only by the 48-bit commitment
+number. That is the price of the option, and it is paid only on channels that
+use it. A node that cannot afford it leaves the bit unset, which this bLIP
+allows (the bit is a SHOULD, not a MUST), and its channels keep the compact
+form; a node that sets it can still close a channel whose storage grows too
+large. Some implementations already keep per-commitment data for every revoked
+state in order to punish a breach (lnd's revocation log, for example), and for
+them the secret adds about 38 bytes (32 plus a TLV header) to a record that
+exists anyway.
 
 A single-signer node gains nothing from the option and loses nothing either: it
 may keep using the seed-based algorithm, so it can still regenerate its own
@@ -202,20 +214,19 @@ change after it opens.
 
 Feature bits below 256 are reserved for the BOLTs, so this one is 266/267. A
 feature vector that sets it is 34 bytes long, where the BOLT channel types in
-use today fit in 7. That cost is paid once per channel in `channel_type`, and
-in `init` and `node_announcement` as for any other bLIP feature bit. If every
-node comes to need the option, moving it into the BOLTs would also give it a
-bit below 256.
+use today fit in 7, or 11 for a simple taproot channel. That cost is paid once
+per channel in `channel_type`, and in `init` and `node_announcement` as for any
+other bLIP feature bit. If every node comes to need the option, moving it into
+the BOLTs would also give it a bit below 256.
 
-Taproot channels need no further change to the protocol, because their nonces
-are never checked by the peer. They do need care inside a multi-signer node. A
-signer that knows another signer's secret nonce, and sees that signer's
-partial signature while the signatures are combined, can compute that
-signer's key share. Nonces derived from a seed that one signer holds would
-therefore hand that signer the other shares, which is the same weakness the
-shachain has for revocation secrets. Each signer has to make its own nonces,
-and the node has to keep them, since it can no longer regenerate them from a
-seed.
+Taproot channels need no change to the messages, because a node's secret nonces
+are never seen or checked by its peer. They do need care inside a multi-signer
+node. A signer that knows another signer's secret nonce, and sees that signer's
+partial signature while the signatures are combined, can compute that signer's
+key share. Nonces derived from a seed that one signer holds would therefore
+hand that signer the other shares, which is the same weakness the shachain has
+for revocation secrets. Each signer has to make its own nonces, and the node
+has to keep them, since it can no longer regenerate them from a seed.
 
 The idea was first proposed by ZmnSCPxj on Delving Bitcoin in April 2026
 ("no_more_shachains", option 2A in his
