@@ -147,6 +147,12 @@ A node receiving per-commitment secrets:
     for as long as each one it receives can be inserted into it:
     - otherwise, MUST store that secret, and every later one, individually,
       together with the number of the commitment transaction it revokes.
+  - if the channel has more than one funding output, for example while a
+    splice is pending:
+    - MUST be able to use each secret against the commitment transaction
+      with that number on every funding output, since one secret revokes all
+      of them: a receiver that stores revoked commitments per funding output
+      MUST make the secret reachable from each.
 
 The commitment number is still 48 bits, so a channel with
 `option_independent_secrets` still has at most 2^48 commitment transactions.
