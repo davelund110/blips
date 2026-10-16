@@ -47,10 +47,11 @@ A node:
 
 `option_independent_secrets` is not a channel type on its own. It is added to
 the variations that
-[BOLT #2](https://github.com/lightning/bolts/blob/master/02-peer-protocol.md#defined-channel-types)
+[BOLT #2](https://github.com/lightning-blake2b/bolts/blob/master/02-peer-protocol.md#defined-channel-types)
 allows for each basic channel type, which become:
   - `option_scid_alias` (bit 46)
   - `option_zeroconf` (bit 50)
+  - `option_unified_sigs` (bit 514)
   - `option_independent_secrets` (bit 266)
 
 It may also be added to the simple taproot channel types (see
@@ -67,7 +68,7 @@ A receiving node:
   - if `option_independent_secrets` applies to the channel:
     - MUST NOT fail the channel or close the connection because the
       `per_commitment_secret` is not related to earlier secrets as
-      described in [BOLT #3](https://github.com/lightning/bolts/blob/master/03-transactions.md#per-commitment-secret-requirements).
+      described in [BOLT #3](https://github.com/lightning-blake2b/bolts/blob/master/03-transactions.md#per-commitment-secret-requirements).
 
 The other requirements on `revoke_and_ack` are unchanged: in particular, the
 receiver still fails the channel if `per_commitment_secret` is not a valid
@@ -102,7 +103,7 @@ and no per-commitment secret has been revealed.
 ### Changes to BOLT 3
 
 For a channel with `option_independent_secrets`, the requirements of
-[Per-commitment Secret Requirements](https://github.com/lightning/bolts/blob/master/03-transactions.md#per-commitment-secret-requirements)
+[Per-commitment Secret Requirements](https://github.com/lightning-blake2b/bolts/blob/master/03-transactions.md#per-commitment-secret-requirements)
 on the first secret, on the I'th secret and on the receiving node are replaced
 by the following, and its requirements on the seed apply only to a node that
 generates its secrets with the seed-based algorithm. The per-commitment secret
@@ -143,7 +144,7 @@ A node receiving per-commitment secrets:
     transaction, and of any HTLC transaction that spends it, has been
     irrevocably resolved.
   - MAY store per-commitment secrets in the compact representation in
-    [Efficient Per-commitment Secret Storage](https://github.com/lightning/bolts/blob/master/03-transactions.md#efficient-per-commitment-secret-storage),
+    [Efficient Per-commitment Secret Storage](https://github.com/lightning-blake2b/bolts/blob/master/03-transactions.md#efficient-per-commitment-secret-storage),
     for as long as each one it receives can be inserted into it:
     - otherwise, MUST store that secret, and every later one, individually,
       together with the number of the commitment transaction it revokes.
@@ -161,7 +162,7 @@ The commitment number is still 48 bits, so a channel with
 
 `option_independent_secrets` MAY be combined with the simple taproot channel
 types of
-[bolt-simple-taproot.md](https://github.com/lightning/bolts/blob/master/bolt-simple-taproot.md).
+[bolt-simple-taproot.md](https://github.com/lightning-blake2b/bolts/blob/master/bolt-simple-taproot.md).
 The per-commitment secrets of such a channel follow this bLIP as on any other
 channel.
 
@@ -233,12 +234,14 @@ The option is a `channel_type` add-on rather than a node-wide flag, so it is
 agreed per channel like other channel features, and a channel's rules never
 change after it opens.
 
-Feature bits below 256 are reserved for the BOLTs, so this one is 266/267. A
-feature vector that sets it is 34 bytes long, where the BOLT channel types in
-use today fit in 7, or 11 for a simple taproot channel. That cost is paid once
-per channel in `channel_type`, and in `init` and `node_announcement` as for any
-other bLIP feature bit. If every node comes to need the option, moving it into
-the BOLTs would also give it a bit below 256.
+Feature bits below 256 are reserved for the BOLTs, so this one is 266/267. On
+this chain that costs nothing in `init` and `node_announcement`: every node
+already sets `option_blake2b` (bit 512) there, so those feature vectors are
+already 65 bytes long. Nor does it lengthen a `channel_type` that includes
+`option_unified_sigs` (bit 514). Only a `channel_type` without
+`option_unified_sigs` grows, to 34 bytes from 7, or from 11 for a simple
+taproot channel, once per channel. If every node comes to need the option,
+moving it into the BOLTs could also give it a bit below 256.
 
 Taproot channels need no change to the messages, because a node's secret nonces
 are never seen or checked by its peer. They do need care inside a multi-signer
@@ -255,8 +258,10 @@ The idea was first proposed by ZmnSCPxj on Delving Bitcoin in April 2026
 
 ## Universality
 
-Nothing here depends on the chain. It is a bLIP rather than a BOLT because it
-is optional and only concerns the two peers of a channel. If it is widely
+Nothing here depends on the BLAKE2b rules: it would apply unchanged on any
+chain that Lightning runs on. It is a bLIP rather than a change to
+[these BOLTs](https://github.com/lightning-blake2b/bolts) because it is
+optional and only concerns the two peers of a channel. If it is widely
 adopted, and multi-signer nodes need every peer to accept it, it can move into
 the BOLTs and be made compulsory there.
 
@@ -278,8 +283,8 @@ users.
 
 ## Reference Implementations
 
-Both are forks for the Bitcoin BLAKE2b chain; nothing in the change depends on
-that chain. They interoperate with each other.
+Both are implementations for this chain, and they interoperate with each
+other.
 
 - lnd (Lightning Fork): `independent-secrets-blip` branch of
   https://github.com/davelund110/lightning-fork
